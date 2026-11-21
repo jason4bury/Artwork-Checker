@@ -1,0 +1,21 @@
+{
+  "AppName": "Artwork Checker",
+  "EntryScript": "src\\Artwork-Checker.ps1",
+  "Icon": "assets\\Artwork-Checker.ico",
+  "Side": "Home",
+  "Description": "PowerShell/WPF tool for finding missing or low-quality posters and cover art",
+  "RequireAdmin": false,
+  "Release": {
+    "Files": {
+      "Artwork-Checker.ps1": "src\\Artwork-Checker.ps1",
+      "New-ArtworkCheckerShortcut.ps1": "src\\New-ArtworkCheckerShortcut.ps1",
+      "Artwork Checker.cmd": "release\\Artwork Checker.cmd",
+      "assets\\Artwork-Checker.ico": "assets\\Artwork-Checker.ico",
+      "assets\\Artwork-Checker.png": "assets\\Artwork-Checker.png",
+      "README.md": "README.md",
+      "CHANGELOG.md": "CHANGELOG.md",
+      "LICENSE": "LICENSE"
+    },
+    "Shortcut": "New-ArtworkCheckerShortcut.ps1"
+  }
+}
