@@ -26,7 +26,7 @@ $ErrorActionPreference = 'Stop'
 # The version lives here and in CHANGELOG.md; Build.cmd stops if they disagree.
 # Two-digit minor: 1.00, 1.01 ... 1.10. The release folder is "Artwork Checker v<version>".
 $script:AppName     = 'Artwork Checker'
-$script:AppVersion  = '1.00'
+$script:AppVersion  = '1.01'
 $script:Description = 'PowerShell/WPF tool for finding missing or low-quality posters and cover art'
 $script:Copyright   = 'Copyright (c) 2026 Jason Rhodes'
 $script:RepoUrl     = 'https://github.com/jason4bury/Artwork-Checker'
@@ -786,6 +786,7 @@ Artwork Checker finds albums, artists, films and shows whose pictures are missin
 
 SOURCES
 Sources... says where everything comes from: the music folders and the music picture folder (with Album Pictures and Artist Pics in it), and for films and TV the media server (Jellyfin, Plex or Emby, with its address and API key or Plex token) and the Movies & TV picture folder. Test checks the server answers.
+Remove folder... takes a music folder off the list for This PC or the NAS, whichever is picked; press Save to keep that. The folder and its files stay where they are.
 
 MUSIC
 Scan (on the Music tab) looks through your music folders. Every folder with music files in it is an album; the folder above it is the artist. Music comes from this PC or the NAS, each with its own folders, chosen in Sources... Each album should have cover.jpg in its folder and a copy in <picture folder>\Album Pictures\<Artist>\<Artist> - <Album>.jpg (or in a folder named like the music folder, such as Soundtracks; the name may end with the year), both exactly 500 x 500. Each artist should have folder.jpg in <picture folder>\Artist Pics\<Artist>, and artist.jpg in its own folder; their size doesn't matter. An album with no cover.jpg whose tracks carry their own cover is marked as worth a look rather than missing.
@@ -797,7 +798,7 @@ WHAT THE COLOURS MEAN
 Red: missing, unreadable or the wrong size. Amber: worth a look (not poster-shaped, no background, not saved yet, no artist.jpg, or a season using its show's poster). Green: fine.
 
 THE LIST
-Problems only hides the ones that are fine. Type in the search box to find an album, artist, film or show. Click a line to see its picture on the right; double-click to open its folder (music) or its page in the media server (films and TV). Export saves the list as a CSV file. It can also save the pictures as files in a folder you choose: on the Music tab the covers (and artist pictures), laid out as Album Pictures\<Artist>\<Artist> - <Album>.jpg and Artist Pics\<Artist>older.jpg; on the Films and TV tabs the posters (and backgrounds, ending in " - fanart.jpg"), in Movies and TV folders. The last scan is kept, so it shows again the next time you start.
+Problems only hides the ones that are fine. Type in the search box to find an album, artist, film or show. Click a line to see its picture on the right; double-click to open its folder (music) or its page in the media server (films and TV). Export saves the list as a CSV file. It can also save the pictures as files in a folder you choose: on the Music tab the covers (and artist pictures), laid out as Album Pictures\<Artist>\<Artist> - <Album>.jpg and Artist Pics\<Artist>\folder.jpg; on the Films and TV tabs the posters (and backgrounds, ending in " - fanart.jpg"), in Movies and TV folders. The last scan is kept, so it shows again the next time you start.
 
 SIZES
 Sources... also sets the cover size (500 x 500) and the smallest poster width (600).
@@ -850,6 +851,55 @@ function Get-ImageUrl($Item, [switch]$Full) {
     return "$($Item.Image)?maxHeight=900&format=Jpg"
 }
 
+function Show-RemoveFolderMenu($Button, [Windows.Controls.TextBox]$Box, [Windows.Controls.TextBlock]$Note) {
+    <# Remove folder...: a menu of the folders in the box; the one picked comes out of the box. Nothing is removed from
+       the disk, and nothing is saved until Save. #>
+    $lines = @($Box.Text -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if (-not $lines.Count) { $Note.Text = 'There are no folders to remove.'; return }
+    $x = @'
+<ContextMenu xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Foreground="{Ink}" MaxWidth="700" MaxHeight="420">
+  <ContextMenu.Template>
+    <ControlTemplate TargetType="ContextMenu">
+      <Border Background="{Card}" BorderBrush="{Line}" BorderThickness="1" CornerRadius="6" Padding="4">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
+      </Border>
+    </ControlTemplate>
+  </ContextMenu.Template>
+  <ContextMenu.ItemContainerStyle>
+    <Style TargetType="MenuItem">
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
+        <Border x:Name="B" Background="Transparent" CornerRadius="4" Padding="10,7"><ContentPresenter ContentSource="Header"/></Border>
+        <ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="B" Property="Background" Value="{Hover}"/></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+  </ContextMenu.ItemContainerStyle>
+</ContextMenu>
+'@
+    $menu = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader ([xml](Expand-Xaml $x))))
+    $menu.FontSize = $Button.FontSize
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $text = New-Object Windows.Controls.TextBlock      # not plain text: that would take a _ as a shortcut key
+        $text.Text = $lines[$i]; $text.TextWrapping = 'Wrap'; $text.MaxWidth = 640
+        $item = New-Object Windows.Controls.MenuItem
+        $item.Header = $text
+        $item.Tag = @{ Index = $i; Folder = $lines[$i]; Box = $Box; Note = $Note }
+        $item.Add_Click({
+            $t = $this.Tag
+            $now = @($t.Box.Text -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            if ($t.Index -ge $now.Count -or $now[$t.Index] -ne $t.Folder) { return }      # the box changed meanwhile
+            $left = @(for ($n = 0; $n -lt $now.Count; $n++) { if ($n -ne $t.Index) { $now[$n] } })
+            $t.Box.Text = $left -join "`r`n"
+            $t.Note.Text = 'Removed from the list. Press Save to keep the change.'
+        })
+        [void]$menu.Items.Add($item)
+    }
+    $menu.PlacementTarget = $Button
+    $menu.Placement = 'Bottom'
+    $Button.ContextMenu = $menu
+    $menu.IsOpen = $true
+}
+
 function Show-Sources {
     $x = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -873,7 +923,11 @@ STYLES
     </StackPanel>
     <TextBlock Text="Music folders, one per line (artist folders with album folders inside):" Margin="0,8,0,0" TextWrapping="Wrap"/>
     <TextBox x:Name="FRoots" Height="62" Margin="0,6,0,0" AcceptsReturn="True" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"/>
-    <Button x:Name="FAdd" Content="Add folder..." HorizontalAlignment="Left" Margin="0,8,0,0"/>
+    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+      <Button x:Name="FAdd" Content="Add folder..."/>
+      <Button x:Name="FRemove" Content="Remove folder..." Margin="0" ContextMenuService.IsEnabled="False"
+              ToolTip="Pick a folder to take off this list. The folder and its files stay where they are."/>
+    </StackPanel>
     <TextBlock Text="Picture folder (holds Album Pictures and Artist Pics):" Margin="0,12,0,4"/>
     <DockPanel><Button x:Name="FMusicPick" Content="..." DockPanel.Dock="Right" Margin="6,0,0,0" Padding="10,4"/><TextBox x:Name="FMusic"/></DockPanel>
     <DockPanel Margin="0,12,0,0">
@@ -988,6 +1042,8 @@ STYLES
         return $null
     }
     $w.FindName('FAdd').Add_Click({ $p = & $pick $roots 'Choose a music folder'; if ($p) { $roots.Text = (($roots.Text.TrimEnd() + "`r`n" + $p).Trim()) } })
+    # Looked up when clicked: FSaved is fetched further down.
+    $w.FindName('FRemove').Add_Click({ Show-RemoveFolderMenu $this $roots $w.FindName('FSaved') })
     $w.FindName('FMusicPick').Add_Click({ $p = & $pick $music 'Choose the music picture folder (with Album Pictures and Artist Pics in it)'; if ($p) { $music.Text = $p } })
     $w.FindName('FFilmsPick').Add_Click({ $p = & $pick $films 'Choose the Movies & TV picture folder'; if ($p) { $films.Text = $p } })
     # Save keeps the window open, so more can be changed; Close (or Esc) closes it.

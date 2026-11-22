@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.01] - 2026-11-22
+
+### Added
+- **Remove folder...** beside Add folder...: pick a folder from the menu to take it off the list.
+  The folder and its files stay where they are.
+
+### Fixed
+- Help and the README show `Artist Pics\<Artist>\folder.jpg` properly (the "\f" was lost).
+
 ## [1.00] - 2026-11-21
 First release.
 
