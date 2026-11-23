@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.02] - 2026-11-23
+### Changed
+- The names of the folders inside the picture folders (**Album Pictures**, **Artist Pics**, **Movies** and **TV**)
+  are settings in **Sources...**, so they can match your own. The names stay the same unless you change them.
+- Neutral wording: "Not saved in the picture folder" instead of naming a folder, and plainer Help and README.
+
 ## [1.01] - 2026-11-22
 
 ### Added
@@ -26,7 +32,7 @@ First release.
   cover are marked as worth a look. CD1 / Disc 2 folders count as one album.
 - **Films and TV check** in Jellyfin, Plex or Emby: every film, show and season's poster (missing, narrower than
   600 pixels or not poster-shaped), whether films and shows have a background, and whether the
-  poster is saved in `Movies & TV\Movies` or `Movies & TV\TV`. **Save posters** copies the missing
+  poster is saved in the picture folder's `Movies` or `TV` folder. **Save posters** copies the missing
   ones from the server.
 - Music, Films and TV tabs with counts, red / amber / green problems, Problems only, search, a
   picture preview, Open folder or Open in the server, Export (the list as CSV, or the pictures as

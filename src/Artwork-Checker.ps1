@@ -26,7 +26,7 @@ $ErrorActionPreference = 'Stop'
 # The version lives here and in CHANGELOG.md; Build.cmd stops if they disagree.
 # Two-digit minor: 1.00, 1.01 ... 1.10. The release folder is "Artwork Checker v<version>".
 $script:AppName     = 'Artwork Checker'
-$script:AppVersion  = '1.01'
+$script:AppVersion  = '1.02'
 $script:Description = 'PowerShell/WPF tool for finding missing or low-quality posters and cover art'
 $script:Copyright   = 'Copyright (c) 2026 Jason Rhodes'
 $script:RepoUrl     = 'https://github.com/jason4bury/Artwork-Checker'
@@ -103,6 +103,7 @@ function Get-AppSetting {
     # To begin with: Windows' Music folder; everything else is set in Sources...
     $s = @{ Look = 'Light'; MusicFrom = 'PC'; PcRoots = @([Environment]::GetFolderPath('MyMusic')); NasRoots = @(); MusicPictures = ''; FilmPictures = ''
             CheckArtists = $true; CoverSize = 500; MinPoster = 600; Tab = 'Music'
+            AlbumFolder = 'Album Pictures'; ArtistFolder = 'Artist Pics'; FilmFolder = 'Movies'; TvFolder = 'TV'
             ServerKind = 'Jellyfin'; JellyfinUrl = ''; JellyfinKey = ''; PlexUrl = ''; PlexKey = ''; EmbyUrl = ''; EmbyKey = '' }
     if (Test-Path -LiteralPath $script:SettingsPath) {
         try {
@@ -112,6 +113,7 @@ function Get-AppSetting {
                     { $_ -in 'PcRoots', 'NasRoots' } { $s[$p.Name] = @($p.Value | ForEach-Object { [string]$_ }) }
                     'CheckArtists' { $s.CheckArtists = [bool]$p.Value }
                     { $_ -in 'CoverSize', 'MinPoster' } { if ("$($p.Value)" -match '^\d+$') { $s[$p.Name] = [int]$p.Value } }
+                    { $_ -in 'AlbumFolder', 'ArtistFolder', 'FilmFolder', 'TvFolder' } { if ("$($p.Value)".Trim()) { $s[$p.Name] = "$($p.Value)".Trim() } }
                     default        { $s[$p.Name] = [string]$p.Value }
                 }
             }
@@ -492,16 +494,16 @@ public static class AcImage {
 # The scans run in a background runspace, so the window stays usable. They share $Sync with the
 # window: new lines go into Sync.Items, and Sync.Done / Sync.Now / Sync.Finished show the progress.
 $script:MusicScan = {
-    param($Sync, [string[]]$Roots, [string]$Graphics, [int]$CoverSize, [bool]$Artists)
+    param($Sync, [string[]]$Roots, [string]$Graphics, [int]$CoverSize, [bool]$Artists, [string]$AlbumSub = 'Album Pictures', [string]$ArtistSub = 'Artist Pics')
     # Each album folder (a folder with music files) should have cover.jpg, and a copy in
-    # <Graphics>\Album Pictures\<Artist>\<Artist> - <Album>.jpg, both exactly CoverSize x CoverSize.
-    # Each artist should have <Graphics>\Artist Pics\<Artist>\folder.jpg and artist.jpg in its folder
-    # (any size).
+    # <Graphics>\<AlbumSub>\<Artist>\<Artist> - <Album>.jpg, both exactly CoverSize x CoverSize.
+    # Each artist should have <Graphics>\<ArtistSub>\<Artist>\folder.jpg and artist.jpg in its folder
+    # (any size). The two folder names are set in Sources...
     $audio = @('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wma', '.wav', '.aac', '.ape', '.wv', '.aiff', '.aif', '.dsf', '.alac')
     $pics  = @('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp')
     $coverNames  = @('cover', 'folder', 'front', 'album', 'albumart')
-    $albumPics  = if ($Graphics) { Join-Path $Graphics 'Album Pictures' } else { '' }
-    $artistPics = if ($Graphics) { Join-Path $Graphics 'Artist Pics' } else { '' }
+    $albumPics  = if ($Graphics) { Join-Path $Graphics $AlbumSub } else { '' }
+    $artistPics = if ($Graphics) { Join-Path $Graphics $ArtistSub } else { '' }
 
     function Add-Line($Kind, $Name, $Group, [string[]]$Problems, $Severity, $Image, $Size, $Where) {
         $i = New-Object AcItem
@@ -561,13 +563,13 @@ $script:MusicScan = {
             $name = [IO.Path]::GetFileName($albumDir)
             $problems = New-Object Collections.Generic.List[string]; $sev = 0; $show = $null; $showSize = $null
 
-            # 1. The copy in <Graphics>\Album Pictures, else in <Graphics>\<music folder's name>
-            #    (Soundtracks). The name may end with the year: "<Artist> - <Album> (1987).jpg".
+            # 1. The copy in <Graphics>\<AlbumSub>, else in <Graphics>\<music folder's name>
+            #    (such as Compilations). The name may end with the year: "<Artist> - <Album> (1987).jpg".
             if ($albumPics -and $artist) {
                 $root = $rootOf[$parent]
                 $picDirs = @($albumPics)
                 if ($root) { $own = Join-Path $Graphics ([IO.Path]::GetFileName($root.TrimEnd(''))); if ([IO.Directory]::Exists($own)) { $picDirs += $own } }
-                $copy = $null; $picName = 'Album Pictures'
+                $copy = $null; $picName = $AlbumSub
                 foreach ($pd in $picDirs) {
                     $ad = Join-Path $pd $artist
                     $copy = Find-File (Join-Path $ad "$artist - $name")
@@ -576,7 +578,7 @@ $script:MusicScan = {
                     }
                     if ($copy) { $picName = [IO.Path]::GetFileName($pd); break }
                 }
-                if (-not $copy) { $problems.Add("Not in Album Pictures"); $sev = 2 }
+                if (-not $copy) { $problems.Add("Not in $AlbumSub"); $sev = 2 }
                 else {
                     $size = Get-Size $copy
                     $show = $copy; $showSize = $size
@@ -609,7 +611,7 @@ $script:MusicScan = {
                 $problems = New-Object Collections.Generic.List[string]; $sev = 0; $show = $null
                 if ($artistPics) {
                     $copy = Find-File (Join-Path (Join-Path $artistPics $name) 'folder')
-                    if ($copy) { $show = $copy } else { $problems.Add('Not in Artist Pics'); $sev = 2 }
+                    if ($copy) { $show = $copy } else { $problems.Add("Not in $ArtistSub"); $sev = 2 }
                 }
                 $own = Find-File (Join-Path $a 'artist')
                 if ($own) { if (-not $show) { $show = $own } } else { $problems.Add('No artist.jpg in its folder'); $sev = [Math]::Max($sev, 1) }
@@ -625,7 +627,7 @@ $script:MusicScan = {
 }
 
 $script:ServerScan = {
-    param($Sync, [string]$Kind, [string]$Url, [string]$Key, [int]$MinPoster, [string]$Backup)
+    param($Sync, [string]$Kind, [string]$Url, [string]$Key, [int]$MinPoster, [string]$Backup, [string]$FilmDir = 'Movies', [string]$TvDir = 'TV')
     # Every film, show and season in Jellyfin, Emby or Plex: its poster (missing, too narrow, wrong
     # shape), a background for films and shows, and a saved copy in <Backup>\Movies or <Backup>\TV.
     function Get-SafeName([string]$Text) { return (($Text -replace '[\\/:*?"<>|]', ' ') -replace '\s+', ' ').Trim() }
@@ -665,7 +667,7 @@ $script:ServerScan = {
         $copy = $null
         if ($Backup) {
             $file = switch ($KindName) { 'Film' { $Name } 'Show' { $Name } default { "$Group - $Name" } }
-            $copy = Join-Path (Join-Path $Backup $(if ($KindName -eq 'Film') { 'Movies' } else { 'TV' })) ((Get-SafeName $file) + '.jpg')
+            $copy = Join-Path (Join-Path $Backup $(if ($KindName -eq 'Film') { $FilmDir } else { $TvDir })) ((Get-SafeName $file) + '.jpg')
         }
         $problems = New-Object Collections.Generic.List[string]; $sev = 0
         if (-not $Image) {
@@ -681,7 +683,7 @@ $script:ServerScan = {
         }
         if ($KindName -ne 'Season' -and -not $HasBackdrop) { $problems.Add('No background picture'); $sev = [Math]::Max($sev, 1) }
         $sevOther = $sev
-        if ($copy -and -not [IO.File]::Exists($copy)) { $problems.Add('Not saved in Movies & TV'); $sev = [Math]::Max($sev, 1) }
+        if ($copy -and -not [IO.File]::Exists($copy)) { $problems.Add('Not saved in the picture folder'); $sev = [Math]::Max($sev, 1) }
         Add-Line $tab $KindName $Name $Group $problems.ToArray() $sev $Size $Where $copy $Image $Page $Id $sevOther $Backdrop
     }
 
@@ -785,14 +787,14 @@ WHAT IT DOES
 Artwork Checker finds albums, artists, films and shows whose pictures are missing or not right, both where your media lives and in your picture folders. Fix them, then scan again.
 
 SOURCES
-Sources... says where everything comes from: the music folders and the music picture folder (with Album Pictures and Artist Pics in it), and for films and TV the media server (Jellyfin, Plex or Emby, with its address and API key or Plex token) and the Movies & TV picture folder. Test checks the server answers.
+Sources... says where everything comes from: the music folders and the music picture folder, and for films and TV the media server (Jellyfin, Plex or Emby, with its address and API key or Plex token) and the picture folder for saved posters. Test checks the server answers. Under each picture folder are the names of the folders inside it: Album Pictures and Artist Pics, Movies and TV to begin with; change them to match your own.
 Remove folder... takes a music folder off the list for This PC or the NAS, whichever is picked; press Save to keep that. The folder and its files stay where they are.
 
 MUSIC
-Scan (on the Music tab) looks through your music folders. Every folder with music files in it is an album; the folder above it is the artist. Music comes from this PC or the NAS, each with its own folders, chosen in Sources... Each album should have cover.jpg in its folder and a copy in <picture folder>\Album Pictures\<Artist>\<Artist> - <Album>.jpg (or in a folder named like the music folder, such as Soundtracks; the name may end with the year), both exactly 500 x 500. Each artist should have folder.jpg in <picture folder>\Artist Pics\<Artist>, and artist.jpg in its own folder; their size doesn't matter. An album with no cover.jpg whose tracks carry their own cover is marked as worth a look rather than missing.
+Scan (on the Music tab) looks through your music folders. Every folder with music files in it is an album; the folder above it is the artist. Music comes from this PC or the NAS, each with its own folders, chosen in Sources... Each album should have cover.jpg in its folder and a copy in <picture folder>\Album Pictures\<Artist>\<Artist> - <Album>.jpg (or in a folder named like the music folder, such as Compilations; the name may end with the year), both exactly 500 x 500. Each artist should have folder.jpg in <picture folder>\Artist Pics\<Artist>, and artist.jpg in its own folder; their size doesn't matter. An album with no cover.jpg whose tracks carry their own cover is marked as worth a look rather than missing.
 
 FILMS AND TV
-Films and TV come from your media server (Jellyfin, Plex or Emby, chosen in Sources...), where their posters are kept. Scan on the Films or TV tab checks every film, show and season: a poster at least 600 pixels wide and poster-shaped, a background for films and shows, and a saved copy in Movies & TV\Movies or Movies & TV\TV. Save posters copies the posters that aren't saved yet from the server into those folders.
+Films and TV come from your media server (Jellyfin, Plex or Emby, chosen in Sources...), where their posters are kept. Scan on the Films or TV tab checks every film, show and season: a poster at least 600 pixels wide and poster-shaped, a background for films and shows, and a saved copy in the picture folder's Movies or TV folder. Save posters copies the posters that aren't saved yet from the server into those folders.
 
 WHAT THE COLOURS MEAN
 Red: missing, unreadable or the wrong size. Amber: worth a look (not poster-shaped, no background, not saved yet, no artist.jpg, or a season using its show's poster). Green: fine.
@@ -928,8 +930,13 @@ STYLES
       <Button x:Name="FRemove" Content="Remove folder..." Margin="0" ContextMenuService.IsEnabled="False"
               ToolTip="Pick a folder to take off this list. The folder and its files stay where they are."/>
     </StackPanel>
-    <TextBlock Text="Picture folder (holds Album Pictures and Artist Pics):" Margin="0,12,0,4"/>
+    <TextBlock Text="Picture folder (album covers and artist pictures are kept in the two folders named below, inside it):" Margin="0,12,0,4" TextWrapping="Wrap"/>
     <DockPanel><Button x:Name="FMusicPick" Content="..." DockPanel.Dock="Right" Margin="6,0,0,0" Padding="10,4"/><TextBox x:Name="FMusic"/></DockPanel>
+    <Grid Margin="0,6,0,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+      <TextBlock Text="Covers in" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBox x:Name="FAlbumDir" Grid.Column="1" ToolTip="The folder inside the picture folder for album covers: Covers in\Artist\Artist - Album.jpg"/>
+      <TextBlock Grid.Column="2" Text="Artist pictures in" VerticalAlignment="Center" Margin="12,0,8,0"/><TextBox x:Name="FArtistDir" Grid.Column="3" ToolTip="The folder inside the picture folder for artist pictures: Artist pictures in\Artist\folder.jpg"/>
+    </Grid>
     <DockPanel Margin="0,12,0,0">
       <TextBox x:Name="FCover" DockPanel.Dock="Right" Width="80"/>
       <CheckBox x:Name="FArtists" Content="Check artist pictures too" VerticalAlignment="Center"/>
@@ -955,8 +962,13 @@ STYLES
       <Button x:Name="STest" Content="Test" DockPanel.Dock="Left" VerticalAlignment="Top"/>
       <TextBlock x:Name="SNote" Foreground="{Soft}" TextWrapping="Wrap" VerticalAlignment="Center"/>
     </DockPanel>
-    <TextBlock Text="Picture folder (holds Movies and TV):" Margin="0,12,0,4"/>
+    <TextBlock Text="Picture folder for saved posters (films and TV are kept in the two folders named below, inside it):" Margin="0,12,0,4" TextWrapping="Wrap"/>
     <DockPanel><Button x:Name="FFilmsPick" Content="..." DockPanel.Dock="Right" Margin="6,0,0,0" Padding="10,4"/><TextBox x:Name="FFilms"/></DockPanel>
+    <Grid Margin="0,6,0,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+      <TextBlock Text="Films in" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBox x:Name="FFilmDir" Grid.Column="1"/>
+      <TextBlock Grid.Column="2" Text="TV in" VerticalAlignment="Center" Margin="12,0,8,0"/><TextBox x:Name="FTvDir" Grid.Column="3"/>
+    </Grid>
     <DockPanel Margin="0,12,0,0">
       <TextBox x:Name="FMinPoster" DockPanel.Dock="Right" Width="80"/>
       <TextBlock Text="Smallest poster width" Margin="0,0,10,0" VerticalAlignment="Center" HorizontalAlignment="Right"/>
@@ -985,6 +997,7 @@ STYLES
     $mNas.Add_Checked({ $mus[$mus.From] = $roots.Text; $mus.From = 'NAS'; $roots.Text = $mus.NAS })
     $music = $w.FindName('FMusic'); $music.Text = [string]$script:Settings.MusicPictures
     $films = $w.FindName('FFilms'); $films.Text = [string]$script:Settings.FilmPictures
+    foreach ($pair in @(@('FAlbumDir', 'AlbumFolder'), @('FArtistDir', 'ArtistFolder'), @('FFilmDir', 'FilmFolder'), @('FTvDir', 'TvFolder'))) { $w.FindName($pair[0]).Text = [string]$script:Settings[$pair[1]] }
     $w.FindName('FArtists').IsChecked = [bool]$script:Settings.CheckArtists
     $w.FindName('FCover').Text = [string]$script:Settings.CoverSize
     $w.FindName('FMinPoster').Text = [string]$script:Settings.MinPoster
@@ -1044,8 +1057,8 @@ STYLES
     $w.FindName('FAdd').Add_Click({ $p = & $pick $roots 'Choose a music folder'; if ($p) { $roots.Text = (($roots.Text.TrimEnd() + "`r`n" + $p).Trim()) } })
     # Looked up when clicked: FSaved is fetched further down.
     $w.FindName('FRemove').Add_Click({ Show-RemoveFolderMenu $this $roots $w.FindName('FSaved') })
-    $w.FindName('FMusicPick').Add_Click({ $p = & $pick $music 'Choose the music picture folder (with Album Pictures and Artist Pics in it)'; if ($p) { $music.Text = $p } })
-    $w.FindName('FFilmsPick').Add_Click({ $p = & $pick $films 'Choose the Movies & TV picture folder'; if ($p) { $films.Text = $p } })
+    $w.FindName('FMusicPick').Add_Click({ $p = & $pick $music 'Choose the music picture folder'; if ($p) { $music.Text = $p } })
+    $w.FindName('FFilmsPick').Add_Click({ $p = & $pick $films 'Choose the picture folder for saved posters'; if ($p) { $films.Text = $p } })
     # Save keeps the window open, so more can be changed; Close (or Esc) closes it.
     $saved = $w.FindName('FSaved')
     $apply = {
@@ -1057,6 +1070,11 @@ STYLES
         $script:Settings.NasRoots = @($mus.NAS -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         $script:Settings.MusicPictures = $music.Text.Trim()
         $script:Settings.FilmPictures = $films.Text.Trim()
+        # A folder name only (no \ or other characters Windows won't take); blank keeps the one before.
+        foreach ($pair in @(@('FAlbumDir', 'AlbumFolder'), @('FArtistDir', 'ArtistFolder'), @('FFilmDir', 'FilmFolder'), @('FTvDir', 'TvFolder'))) {
+            $t = $w.FindName($pair[0]).Text.Trim()
+            if ($t -and $t.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -lt 0) { $script:Settings[$pair[1]] = $t } else { $w.FindName($pair[0]).Text = [string]$script:Settings[$pair[1]] }
+        }
         $script:Settings.CheckArtists = [bool]$w.FindName('FArtists').IsChecked
         foreach ($pair in @(@('CoverSize', 'FCover'), @('MinPoster', 'FMinPoster'))) {
             $t = $w.FindName($pair[1]).Text.Trim()
@@ -1351,11 +1369,11 @@ function Start-Scan {
     if ($tab -eq 'Music') {
         $roots = @(Get-MusicRoots)
         if (-not $roots.Count) { Show-Sources; return }
-        [void]$ps.AddScript($script:MusicScan).AddArgument($sync).AddArgument([string[]]$roots).AddArgument([string]$script:Settings.MusicPictures).AddArgument([int]$script:Settings.CoverSize).AddArgument([bool]$script:Settings.CheckArtists)
+        [void]$ps.AddScript($script:MusicScan).AddArgument($sync).AddArgument([string[]]$roots).AddArgument([string]$script:Settings.MusicPictures).AddArgument([int]$script:Settings.CoverSize).AddArgument([bool]$script:Settings.CheckArtists).AddArgument([string]$script:Settings.AlbumFolder).AddArgument([string]$script:Settings.ArtistFolder)
         $tabs = @('Music')
     } else {
         if (-not (Get-ServerUrl) -or -not (Get-ServerKey)) { Show-Sources; if (-not (Get-ServerUrl) -or -not (Get-ServerKey)) { return } }
-        [void]$ps.AddScript($script:ServerScan).AddArgument($sync).AddArgument([string]$script:Settings.ServerKind).AddArgument((Get-ServerUrl)).AddArgument((Get-ServerKey)).AddArgument([int]$script:Settings.MinPoster).AddArgument([string]$script:Settings.FilmPictures)
+        [void]$ps.AddScript($script:ServerScan).AddArgument($sync).AddArgument([string]$script:Settings.ServerKind).AddArgument((Get-ServerUrl)).AddArgument((Get-ServerKey)).AddArgument([int]$script:Settings.MinPoster).AddArgument([string]$script:Settings.FilmPictures).AddArgument([string]$script:Settings.FilmFolder).AddArgument([string]$script:Settings.TvFolder)
         $tabs = @('Films', 'TV')
     }
     # The old lines for what is being scanned go; the rest stay.
@@ -1369,7 +1387,7 @@ function Start-Scan {
 }
 
 function Start-Save {
-    <# Copies the posters that aren't saved yet (this tab) from the media server into Movies & TV, in the background. #>
+    <# Copies the posters that aren't saved yet (this tab) from the media server into the picture folder, in the background. #>
     if ($script:Job) { return }
     $tab = Get-CurrentTab
     $todo = @($script:Items | Where-Object { $_.Tab -eq $tab -and $_.CanSave })
@@ -1398,7 +1416,7 @@ function Update-Scan {
         # A saved poster: take "Not saved" off its line.
         foreach ($i in @($new | Where-Object { $_ })) {
             $i.CanSave = $false
-            $i.Problem = (($i.Problem -split '; ') | Where-Object { $_ -ne 'Not saved in Movies & TV' }) -join '; '
+            $i.Problem = (($i.Problem -split '; ') | Where-Object { $_ -ne 'Not saved in the picture folder' }) -join '; '
             if (-not $i.Problem) { $i.Problem = 'OK' }
             $i.Severity = $i.SevOther
         }
@@ -1431,7 +1449,7 @@ function Update-Scan {
 
 function Export-List {
     <# The list as a CSV file, or the pictures as files in a folder of your choice:
-       Music: covers (and artist pictures) from the music folders, laid out like For MP3's.
+       Music: covers (and artist pictures) from the music folders, laid out like the picture folder.
        Films and TV: posters (and backgrounds) from the media server. #>
     $tab = Get-CurrentTab
     $music = $tab -eq 'Music'
@@ -1469,14 +1487,14 @@ STYLES
         $w.FindName('EHead').Text = 'Export music pictures'
         $w.FindName('EPosters').Content = 'Album covers, as picture files'
         $w.FindName('EBoth').Content = 'Album covers and artist pictures'
-        $w.FindName('EFolderLabel').Text = "Save into (Album Pictures\<Artist>\<Artist> - <Album>.jpg and Artist Pics\<Artist>\folder.jpg are made inside it):"
+        $w.FindName('EFolderLabel').Text = "Save into ($($script:Settings.AlbumFolder)\<Artist>\<Artist> - <Album>.jpg and $($script:Settings.ArtistFolder)\<Artist>\folder.jpg are made inside it):"
         $box.Text = if ($script:Settings.MusicPictures) { [string]$script:Settings.MusicPictures } else { [Environment]::GetFolderPath('MyPictures') }
         $w.FindName('ENote').Text = if ($mine.Count) { "The covers are copied from each album folder (cover.jpg) and the artist pictures from each artist folder (artist.jpg)." } else { 'Scan this tab first: no albums have been found yet.' }
     } else {
         $w.FindName('EHead').Text = "Export $tab from $($script:Settings.ServerKind)"
         $w.FindName('EPosters').Content = 'Posters, as picture files'
         $w.FindName('EBoth').Content = 'Posters and backgrounds (backgrounds end in " - fanart.jpg")'
-        $w.FindName('EFolderLabel').Text = 'Save into (Movies and TV folders are made inside it):'
+        $w.FindName('EFolderLabel').Text = "Save into ($($script:Settings.FilmFolder) and $($script:Settings.TvFolder) folders are made inside it):"
         $box.Text = if ($script:Settings.FilmPictures) { [string]$script:Settings.FilmPictures } else { [Environment]::GetFolderPath('MyPictures') }
         $withPic = @($mine | Where-Object { $_.Image })
         $w.FindName('ENote').Text = if ($withPic.Count) { "$($withPic.Count) on this tab have a poster in $($script:Settings.ServerKind)." } else { 'Scan this tab first: nothing has been read from the server yet.' }
@@ -1522,20 +1540,20 @@ STYLES
     Set-Status 'Finding the pictures to export...'
     foreach ($i in $mine) {
         if ($music) {
-            # Music: <folder>\Album Pictures\<Artist>\<Artist> - <Album>.jpg and <folder>\Artist Pics\<Artist>\folder.jpg
+            # Music: <folder>\<AlbumFolder>\<Artist>\<Artist> - <Album>.jpg and <folder>\<ArtistFolder>\<Artist>\folder.jpg
             if ($i.Kind -eq 'Album' -and $i.Group) {
                 $src = & $firstPic $i.Where @('cover', 'folder', 'front')
-                $path = Join-Path (Join-Path (Join-Path $folder 'Album Pictures') (& $safe $i.Group)) ((& $safe "$($i.Group) - $($i.Name)") + [IO.Path]::GetExtension("$src").ToLower())
+                $path = Join-Path (Join-Path (Join-Path $folder $script:Settings.AlbumFolder) (& $safe $i.Group)) ((& $safe "$($i.Group) - $($i.Name)") + [IO.Path]::GetExtension("$src").ToLower())
                 if ($src -and ($overwrite -or -not [IO.File]::Exists($path))) { $jobs.Add(@{ Url = $src; Path = $path; Item = $null }) }
             } elseif ($i.Kind -eq 'Artist' -and $what -eq 'Both') {
                 $src = & $firstPic $i.Where @('artist', 'folder')
-                $path = Join-Path (Join-Path (Join-Path $folder 'Artist Pics') (& $safe $i.Name)) ('folder' + [IO.Path]::GetExtension("$src").ToLower())
+                $path = Join-Path (Join-Path (Join-Path $folder $script:Settings.ArtistFolder) (& $safe $i.Name)) ('folder' + [IO.Path]::GetExtension("$src").ToLower())
                 if ($src -and ($overwrite -or -not [IO.File]::Exists($path))) { $jobs.Add(@{ Url = $src; Path = $path; Item = $null }) }
             }
             continue
         }
-        # Films and TV: <folder>\Movies\<Film (Year)>.jpg, <folder>\TV\<Show>.jpg and <Show> - <Season>.jpg
-        $sub = if ($i.Kind -eq 'Film') { 'Movies' } else { 'TV' }
+        # Films and TV: <folder>\<FilmFolder>\<Film (Year)>.jpg, <folder>\<TvFolder>\<Show>.jpg and <Show> - <Season>.jpg
+        $sub = if ($i.Kind -eq 'Film') { $script:Settings.FilmFolder } else { $script:Settings.TvFolder }
         $base = Join-Path (Join-Path $folder $sub) (& $safe $(if ($i.Kind -eq 'Season') { "$($i.Group) - $($i.Name)" } else { $i.Name }))
         if ($i.Image) {
             $path = "$base.jpg"
