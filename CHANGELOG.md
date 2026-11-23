@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.03] - 2026-11-23
+### Changed
+- A new install starts with no music folders (it used to fill in Windows' Music folder) and no media server
+  address (it used to fill in http://localhost); add your own in **Sources...**. The usual address is a tooltip.
+
 ## [1.02] - 2026-11-23
 ### Changed
 - The names of the folders inside the picture folders (**Album Pictures**, **Artist Pics**, **Movies** and **TV**)

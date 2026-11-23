@@ -6,7 +6,7 @@
 
 Finds films, shows and albums with missing or low-quality posters and cover art.
 
-![Version](https://img.shields.io/badge/version-v1.02-blue) ![Platform](https://img.shields.io/badge/platform-Windows-0078D6) ![PowerShell](https://img.shields.io/badge/PowerShell-5.1-5391FE) ![Licence](https://img.shields.io/badge/licence-MIT-green) ![Last commit](https://img.shields.io/github/last-commit/jason4bury/Artwork-Checker)
+![Version](https://img.shields.io/badge/version-v1.03-blue) ![Platform](https://img.shields.io/badge/platform-Windows-0078D6) ![PowerShell](https://img.shields.io/badge/PowerShell-5.1-5391FE) ![Licence](https://img.shields.io/badge/licence-MIT-green) ![Last commit](https://img.shields.io/github/last-commit/jason4bury/Artwork-Checker)
 
 
 ## ✨ Features
@@ -32,7 +32,7 @@ Artwork Checker is a PowerShell/WPF tool that finds the albums, artists, films a
 
 ## 📦 Installation
 
-1. Download `Artwork-Checker-v1.02.zip` from the [latest release](../../releases/latest) and unzip it wherever you like to keep it.
+1. Download `Artwork-Checker-v1.03.zip` from the [latest release](../../releases/latest) and unzip it wherever you like to keep it.
 2. Double-click **Artwork Checker.cmd** in the unzipped folder. It makes a **Artwork Checker** shortcut there and in the Start menu, and starts the tool. From then on, use the shortcut, the Start menu or a pinned taskbar button.
 
 Nothing is installed and no Windows settings are changed. The shortcut runs the script with PowerShell's execution policy bypassed for that run only.
@@ -50,7 +50,7 @@ Double-click **Build.cmd** in the repo folder. It reads `build.json`, checks eve
 ## 🚀 Usage
 
 1. Start Artwork Checker (the shortcut, the Start menu, or **Artwork Checker.cmd**).
-2. Press **Sources...** to say where everything comes from: music from **This PC** or the **NAS**, each with its own folders (Windows' Music folder to begin with), and the music picture folder (the one with `Album Pictures` and `Artist Pics` in it); for films and TV, **Jellyfin**, **Plex** or **Emby**, its address and API key (or Plex token), and the picture folder for saved posters (with `Movies` and `TV` in it). **Test** checks the server answers. The names of the folders inside each picture folder can be changed to match yours. Then **Save**. **Remove folder...** takes a music folder off the list without touching its files.
+2. Press **Sources...** to say where everything comes from: music from **This PC** or the **NAS**, each with its own folders (none to begin with: add yours), and the music picture folder (the one with `Album Pictures` and `Artist Pics` in it); for films and TV, **Jellyfin**, **Plex** or **Emby**, its address and API key (or Plex token), and the picture folder for saved posters (with `Movies` and `TV` in it). **Test** checks the server answers. The names of the folders inside each picture folder can be changed to match yours. Then **Save**. **Remove folder...** takes a music folder off the list without touching its files.
 3. Press **Scan** on the **Music** tab.
    For films and TV, press **Scan** on the **Films** or **TV** tab, then **Save posters** to copy the missing posters into the picture folder.
 4. Click a line to see its picture; double-click to open its folder or its page in the media server. Fix it there, then scan again.

@@ -26,7 +26,7 @@ $ErrorActionPreference = 'Stop'
 # The version lives here and in CHANGELOG.md; Build.cmd stops if they disagree.
 # Two-digit minor: 1.00, 1.01 ... 1.10. The release folder is "Artwork Checker v<version>".
 $script:AppName     = 'Artwork Checker'
-$script:AppVersion  = '1.02'
+$script:AppVersion  = '1.03'
 $script:Description = 'PowerShell/WPF tool for finding missing or low-quality posters and cover art'
 $script:Copyright   = 'Copyright (c) 2026 Jason Rhodes'
 $script:RepoUrl     = 'https://github.com/jason4bury/Artwork-Checker'
@@ -100,8 +100,8 @@ function Get-AssetImage {
 function Get-AppSetting {
     <# Settings from settings.json in the data folder: the look, the music folders, the smallest
        sizes, the media server and the last tab. #>
-    # To begin with: Windows' Music folder; everything else is set in Sources...
-    $s = @{ Look = 'Light'; MusicFrom = 'PC'; PcRoots = @([Environment]::GetFolderPath('MyMusic')); NasRoots = @(); MusicPictures = ''; FilmPictures = ''
+    # To begin with: nothing (no music folders, no server address); everything is set in Sources...
+    $s = @{ Look = 'Light'; MusicFrom = 'PC'; PcRoots = @(); NasRoots = @(); MusicPictures = ''; FilmPictures = ''
             CheckArtists = $true; CoverSize = 500; MinPoster = 600; Tab = 'Music'
             AlbumFolder = 'Album Pictures'; ArtistFolder = 'Artist Pics'; FilmFolder = 'Movies'; TvFolder = 'TV'
             ServerKind = 'Jellyfin'; JellyfinUrl = ''; JellyfinKey = ''; PlexUrl = ''; PlexKey = ''; EmbyUrl = ''; EmbyKey = '' }
@@ -1010,7 +1010,8 @@ STYLES
     $state = @{ Kind = [string]$script:Settings.ServerKind }
     $show = {
         $k = $state.Kind
-        $url.Text = if ($edit[$k].Url) { $edit[$k].Url } else { $script:ServerDefaults[$k] }
+        $url.Text = $edit[$k].Url   # blank until you type it
+        $url.ToolTip = "The server's web address, such as $($script:ServerDefaults[$k]) on the server itself, or http://<its address>:$(([uri]$script:ServerDefaults[$k]).Port) from another PC"
         $key.Password = $edit[$k].Key
         $keyLabel.Text = if ($k -eq 'Plex') { 'Plex token' } else { 'API key' }
         $note.Foreground = Get-Brush 'Soft'
@@ -1030,6 +1031,7 @@ STYLES
     $w.FindName('STest').Add_Click({
         & $keep
         $k = $state.Kind; $u = $edit[$k].Url
+        if (-not $u) { $note.Foreground = Get-Brush 'Warn'; $note.Text = "Type the server's web address first, such as $($script:ServerDefaults[$k])."; return }
         try {
             $h = Get-ServerHeader $k $edit[$k].Key
             $h['Accept'] = 'application/json'
